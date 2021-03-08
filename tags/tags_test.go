@@ -44,6 +44,10 @@ var (
 	}
 )
 
+func ExpectedResources() *resapi.GetResourcesOutput {
+	return testGetResourcesResponse
+}
+
 type MockResourceGroupsTaggingAPIClient struct {
 	resapiiface.ResourceGroupsTaggingAPIAPI
 }
@@ -76,6 +80,9 @@ func TestGetResources(t *testing.T) {
 	}
 	if resourceList == nil {
 		t.Errorf("resourceList was nil")
+	}
+	if len(resourceList) != len(testGetResourcesResponse.ResourceTagMappingList) {
+		t.Errorf("length of response (%d) didn't match expected (%d)", len(resourceList), len(testGetResourcesResponse.ResourceTagMappingList))
 	}
 	for idx, r := range resourceList {
 		t.Logf("resource[%d]: %+v", idx, r)
