@@ -11,36 +11,37 @@ import (
 )
 
 var (
-	testGetResourcesResponse *resapi.GetResourcesOutput = &resapi.GetResourcesOutput{
-		PaginationToken: aws.String(""),
-		ResourceTagMappingList: []*resapi.ResourceTagMapping{
-			{
-				ResourceARN: aws.String("arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/test/abc123"),
-				Tags: []*resapi.Tag{
-					{
-						Key:   aws.String("tag1"),
-						Value: aws.String("value1"),
-					},
-					{
-						Key:   aws.String("tag:test"),
-						Value: aws.String("thing"),
-					},
+	testResourceTagMappings []*resapi.ResourceTagMapping = []*resapi.ResourceTagMapping{
+		{
+			ResourceARN: aws.String("arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/test/abc123"),
+			Tags: []*resapi.Tag{
+				{
+					Key:   aws.String("name"),
+					Value: aws.String("value1"),
 				},
-			},
-			{
-				ResourceARN: aws.String("arn:aws:rds:us-east-1:123456789012:db:test"),
-				Tags: []*resapi.Tag{
-					{
-						Key:   aws.String("Name"),
-						Value: aws.String("test"),
-					},
-					{
-						Key:   aws.String("tag:test"),
-						Value: aws.String("stuff"),
-					},
+				{
+					Key:   aws.String("thing:test"),
+					Value: aws.String("thing"),
 				},
 			},
 		},
+		{
+			ResourceARN: aws.String("arn:aws:rds:us-east-1:123456789012:db:test"),
+			Tags: []*resapi.Tag{
+				{
+					Key:   aws.String("Name"),
+					Value: aws.String("test"),
+				},
+				{
+					Key:   aws.String("thing:test"),
+					Value: aws.String("stuff"),
+				},
+			},
+		},
+	}
+	testGetResourcesResponse *resapi.GetResourcesOutput = &resapi.GetResourcesOutput{
+		PaginationToken:        aws.String(""),
+		ResourceTagMappingList: testResourceTagMappings,
 	}
 )
 
@@ -53,7 +54,37 @@ type MockResourceGroupsTaggingAPIClient struct {
 }
 
 func (m *MockResourceGroupsTaggingAPIClient) GetResources(input *resapi.GetResourcesInput) (*resapi.GetResourcesOutput, error) {
-	return testGetResourcesResponse, nil
+
+	if input.TagFilters == nil && input.ResourceTypeFilters == nil {
+		return testGetResourcesResponse, nil
+	}
+
+	// apply some filters
+	tagMappingList := make([]*resapi.ResourceTagMapping, 0)
+
+	for _, r := range testResourceTagMappings {
+		add := false
+		if input.TagFilters != nil {
+			for _, tf := range input.TagFilters {
+				for _, tag := range r.Tags {
+					// FIXME: assume only a single value
+					if unrefstr(tag.Key) == unrefstr(tf.Key) && unrefstr(tag.Value) == unrefstr(tf.Values[0]) {
+						add = true
+					}
+				}
+			}
+		}
+		if add {
+			tagMappingList = append(tagMappingList, r)
+		}
+	}
+
+	resp := &resapi.GetResourcesOutput{
+		PaginationToken:        aws.String(""),
+		ResourceTagMappingList: tagMappingList,
+	}
+
+	return resp, nil
 }
 
 var (
@@ -87,4 +118,27 @@ func TestGetResources(t *testing.T) {
 	for idx, r := range resourceList {
 		t.Logf("resource[%d]: %+v", idx, r)
 	}
+}
+
+func TestGetResourcesWithTags(t *testing.T) {
+	setup(t)
+	tagf := map[string]string{"Name": "test"}
+	expectedResArn := "arn:aws:rds:us-east-1:123456789012:db:test"
+	resourceList, err := tagsclient.GetResources(tags.WithTags(tagf))
+	if err != nil {
+		t.Fatalf("Error fetching resource list: %v", err)
+	}
+	if len(resourceList) != 1 {
+		t.Fatalf("len(resourceList) (%d) != 1", len(resourceList))
+	}
+	if resourceList[0].ARN != expectedResArn {
+		t.Errorf("resource arn (%s) didn't match expected (%s)", resourceList[0].ARN, expectedResArn)
+	}
+}
+
+func unrefstr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }

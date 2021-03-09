@@ -1,6 +1,10 @@
 // Package tags wraps AWS Resource Groups Tagging API in a basic interface that provides calls specific to our needs
 package tags
 
+// Note: from aws docs: Allowed characters can vary by AWS service. For information about what characters you can use
+//   to tag resources in a particular AWS service, see its documentation. In general, allowed characters in tags are
+//   letters, numbers, spaces representable in UTF-8, and the following characters: _ . : / = + - @ .
+
 import (
 	"fmt"
 
@@ -127,7 +131,7 @@ func (c *Client) GetResources(filteropts ...GetResourcesFilterOpts) ([]*Resource
 		l.Infof("processing resources page %d", pageCount)
 
 		for _, resource := range output.ResourceTagMappingList {
-			tags := make(map[string]string, 1)
+			tags := make(map[string]string, 0)
 			for _, t := range resource.Tags {
 				if _, ok := tags[*t.Key]; ok {
 					l.Warnf("resource %s - dup tag key %s - clobbering! (old val: %s, new val: %s)", *resource.ResourceARN, *t.Key, tags[*t.Key], *t.Value)
