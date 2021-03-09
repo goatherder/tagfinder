@@ -9,6 +9,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	tagKeyVal string
+)
+
 // listCmd represents the list command
 var listCmd = &cobra.Command{
 	Use:   "list",
@@ -23,15 +27,20 @@ func listResources(cmd *cobra.Command, args []string) {
 	if err != nil {
 		l.Errorf("error intializing tags client: %v", err)
 	}
-	resources, err := tags.GetResources()
-	if err != nil {
-		l.Errorf("error listing resources: %v", err)
-	}
-	for idx, r := range resources {
-		fmt.Printf("resource[%d]: %s: tags: %v\n", idx, r.ARN, r.Tags)
+
+	if tagKeyVal != "" {
+		resources, err := tags.GetResources()
+		if err != nil {
+			l.Errorf("error listing resources: %v", err)
+		}
+		for idx, r := range resources {
+			fmt.Printf("resource[%d]: %s: tags: %v\n", idx, r.ARN, r.Tags)
+		}
+
 	}
 }
 
 func init() {
+	listCmd.PersistentFlags().StringVarP(&tagKeyVal, "tagkeyval", "t", "", "Tag filter")
 	rootCmd.AddCommand(listCmd)
 }

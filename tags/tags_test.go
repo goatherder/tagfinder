@@ -1,11 +1,13 @@
 package tags_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
 	resapi "github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
 	resapiiface "github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi/resourcegroupstaggingapiiface"
+	"github.com/goatherder/tagfinder/arn"
 	"github.com/goatherder/tagfinder/tags"
 	log "github.com/sirupsen/logrus"
 )
@@ -70,7 +72,21 @@ func (m *MockResourceGroupsTaggingAPIClient) GetResources(input *resapi.GetResou
 					// FIXME: assume only a single value
 					if unrefstr(tag.Key) == unrefstr(tf.Key) && unrefstr(tag.Value) == unrefstr(tf.Values[0]) {
 						add = true
+						break
 					}
+				}
+			}
+		}
+		if !add && input.ResourceTypeFilters != nil {
+			arn, err := arn.NewARNFromString(unrefstr(r.ResourceARN))
+			if err != nil {
+				return nil, fmt.Errorf("error parsing test resource arn: %v", err)
+			}
+
+			for _, rtf := range input.ResourceTypeFilters {
+				if unrefstr(rtf) == arn.Service {
+					add = true
+					break
 				}
 			}
 		}
@@ -125,6 +141,24 @@ func TestGetResourcesWithTags(t *testing.T) {
 	tagf := map[string]string{"Name": "test"}
 	expectedResArn := "arn:aws:rds:us-east-1:123456789012:db:test"
 	resourceList, err := tagsclient.GetResources(tags.WithTags(tagf))
+	if err != nil {
+		t.Fatalf("Error fetching resource list: %v", err)
+	}
+	if len(resourceList) != 1 {
+		t.Fatalf("len(resourceList) (%d) != 1", len(resourceList))
+	}
+	if resourceList[0].ARN != expectedResArn {
+		t.Errorf("resource arn (%s) didn't match expected (%s)", resourceList[0].ARN, expectedResArn)
+	}
+}
+
+func TestGetResourcesWithType(t *testing.T) {
+	setup(t)
+	rtypes := []string{
+		"elasticloadbalancing",
+	}
+	expectedResArn := "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/test/abc123"
+	resourceList, err := tagsclient.GetResources(tags.WithResourceTypes(rtypes))
 	if err != nil {
 		t.Fatalf("Error fetching resource list: %v", err)
 	}
